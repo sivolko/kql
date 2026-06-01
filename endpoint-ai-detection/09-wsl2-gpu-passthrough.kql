@@ -1,0 +1,36 @@
+// ============================================================
+// Detection: ML Workloads Running Inside WSL2 with GPU Access
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceProcessEvents
+// Note     : WSL2 supports CUDA passthrough via WDDM 2.9+.
+//            Users route AI workloads through WSL2 to bypass
+//            Windows-side monitoring and policy controls.
+// ============================================================
+
+DeviceProcessEvents
+| where Timestamp > ago(7d)
+| where (
+    InitiatingProcessFileName =~ "wsl.exe"
+    or FolderPath has "\\wsl$\\"
+    or FolderPath has "/mnt/wsl"
+    or InitiatingProcessFileName =~ "wslhost.exe"
+)
+| where ProcessCommandLine has_any (
+    // GPU diagnostic tools
+    "nvidia-smi", "nvcc", "nvtop",
+    // Python ML workloads
+    "python", "pip", "pip3",
+    "conda", "mamba",
+    // Known LLM runtimes (Linux names)
+    "ollama", "llama", "llama-server",
+    "vllm", "sglang",
+    "koboldcpp", "text-generation-webui",
+    "comfyui",
+    // ROCm (AMD)
+    "rocminfo", "rocm-smi",
+    // Inference package names
+    "transformers", "torch", "tensorflow"
+)
+| project Timestamp, DeviceName, AccountName,
+          InitiatingProcessFileName, ProcessCommandLine, FolderPath
+| order by Timestamp desc

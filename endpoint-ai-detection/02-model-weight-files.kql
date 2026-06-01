@@ -1,0 +1,49 @@
+// ============================================================
+// Detection: Model Weight File Creation / Modification
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceFileEvents
+// Note     : Model files are the most definitive low-noise
+//            indicator of local AI workloads.
+// ============================================================
+
+let ModelPaths = dynamic([
+    "models", "weights", "checkpoints",
+    "huggingface", ".cache\\huggingface", "hub\\models--",
+    "lm_studio\\models", "ollama\\models",
+    "koboldcpp", "text-generation-webui\\models",
+    "stable-diffusion", "comfyui\\models",
+    "invokeai\\models", "whisper"
+]);
+
+DeviceFileEvents
+| where Timestamp > ago(7d)
+| where ActionType in ("FileCreated", "FileModified")
+| where (
+    // llama.cpp quantized formats — definitive
+    FileName endswith ".gguf"
+    or FileName endswith ".ggml"
+    // HuggingFace safetensors
+    or (FileName endswith ".safetensors" and FileSize > 100000000)    // >100 MB
+    // ONNX models
+    or (FileName endswith ".onnx" and FileSize > 50000000)            // >50 MB
+    // Apple CoreML
+    or (FileName endswith ".mlmodel" and FileSize > 100000000)
+    // TensorFlow Lite
+    or (FileName endswith ".tflite" and FileSize > 10000000)          // >10 MB
+    // PyTorch / TensorFlow checkpoints
+    or (
+        (FileName endswith ".bin" or FileName endswith ".pt" or FileName endswith ".pth")
+        and FileSize > 500000000                                       // >500 MB
+        and FolderPath has_any (ModelPaths)
+    )
+    // Legacy pickle / checkpoint formats
+    or (
+        (FileName endswith ".pkl" or FileName endswith ".ckpt")
+        and FileSize > 200000000                                       // >200 MB
+        and FolderPath has_any (ModelPaths)
+    )
+)
+| project Timestamp, DeviceName, AccountName, FileName,
+          FileSize, FolderPath, ActionType
+| extend FileSizeGB = round(toreal(FileSize) / 1073741824, 2)
+| order by FileSize desc

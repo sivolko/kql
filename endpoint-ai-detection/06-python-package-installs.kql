@@ -1,0 +1,57 @@
+// ============================================================
+// Detection: pip / conda Install Events for AI/ML Packages
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceProcessEvents
+// Note     : Catches AI framework installation at the moment
+//            it happens — covers frameworks missed in runtime
+//            process telemetry until after first execution.
+// ============================================================
+
+DeviceProcessEvents
+| where Timestamp > ago(30d)
+| where (
+    FileName in~ ("pip.exe", "pip3.exe", "pip", "pip3", "uv.exe")
+    or ProcessCommandLine has "pip install"
+    or ProcessCommandLine has "pip3 install"
+    or ProcessCommandLine has "uv pip install"
+    or ProcessCommandLine has "conda install"
+    or ProcessCommandLine has "mamba install"
+    or ProcessCommandLine has "micromamba install"
+)
+| where ProcessCommandLine has_any (
+    // Core ML frameworks
+    "torch", "torchvision", "torchaudio",
+    "tensorflow", "tf-keras", "keras",
+    "jax", "flax", "haiku",
+    // Inference
+    "transformers", "diffusers", "optimum",
+    "llama-cpp-python", "llama_cpp",
+    "ctransformers", "exllamav2",
+    "autoawq", "auto-gptq", "bitsandbytes",
+    "vllm", "sglang",
+    // HuggingFace
+    "huggingface-hub", "datasets",
+    "accelerate", "peft", "trl",
+    // Image generation
+    "diffusers", "controlnet-aux",
+    // Audio / speech
+    "openai-whisper", "faster-whisper",
+    "TTS", "bark", "coqui-tts",
+    // Agent / orchestration
+    "langchain", "langchain-community",
+    "llama-index", "llama_index",
+    "autogen", "pyautogen",
+    "crewai", "semantic-kernel",
+    // API clients
+    "openai", "anthropic", "cohere",
+    "mistralai", "groq", "together",
+    // Serving
+    "ollama", "gradio", "streamlit",
+    "fastapi", "uvicorn",
+    // ONNX / edge inference
+    "onnxruntime", "onnxruntime-gpu",
+    "openvino"
+)
+| project Timestamp, DeviceName, AccountName,
+          FileName, ProcessCommandLine, FolderPath
+| order by Timestamp desc

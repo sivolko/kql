@@ -1,0 +1,42 @@
+// ============================================================
+// Detection: Outbound Traffic to Model Distribution Hubs
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceNetworkEvents
+// Covers   : HuggingFace CDN, CivitAI, Ollama registry,
+//            Replicate, Kaggle, generic S3/GCS model repos
+// ============================================================
+
+let ModelHubs = dynamic([
+    "huggingface.co",
+    "cdn-lfs.huggingface.co",
+    "cdn-lfs-us-1.huggingface.co",
+    "cdn-lfs-us-2.huggingface.co",
+    "civitai.com",
+    "ollama.com",
+    "replicate.com",
+    "kaggle.com"
+]);
+
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where (
+    // Direct hub domain matches
+    RemoteUrl has_any (ModelHubs)
+    // URL pattern matches for model file CDN paths
+    or (
+        RemoteIPType != "Private"
+        and (
+            RemoteUrl has ".gguf"
+            or RemoteUrl has ".safetensors"
+            or RemoteUrl has ".onnx"
+            or RemoteUrl has ".mlmodel"
+            or RemoteUrl has "/resolve/main/"       // HuggingFace CDN pattern
+            or RemoteUrl has "/models--"            // HuggingFace hub cache pattern
+            or RemoteUrl has "model.safetensors"
+            or RemoteUrl has "pytorch_model"
+        )
+    )
+)
+| project Timestamp, DeviceName, AccountName,
+          InitiatingProcessFileName, RemoteUrl, RemoteIP, RemotePort
+| order by Timestamp desc

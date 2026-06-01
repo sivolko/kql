@@ -1,0 +1,48 @@
+// ============================================================
+// Detection: Local Inference Server Port Bindings
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceNetworkEvents
+// Covers   : All known local AI server listening ports
+// ============================================================
+
+let InferencePorts = dynamic([
+    11434,  // Ollama
+    1234,   // LM Studio
+    1337,   // Jan.ai
+    8080,   // LocalAI, Tabby, generic
+    8000,   // vLLM, FastAPI, HuggingFace TGI
+    7860,   // Gradio (text-gen-webui, SD WebUI, ComfyUI)
+    7861,   // Gradio alt
+    7862,   // Gradio alt
+    3000,   // Jan.ai alt, OpenWebUI
+    3001,   // OpenWebUI alt
+    5000,   // Flask-based inference apps
+    5001,   // Flask alt
+    8888,   // Jupyter Notebook
+    8889,   // Jupyter alt
+    9000,   // Tabby alt
+    9090,   // Various
+    10000,  // Coqui TTS
+    5005,   // XTTS (voice cloning)
+    8020,   // Bark TTS
+    4891,   // GPT4All
+    4892,   // GPT4All alt
+    8265,   // Ray dashboard (vLLM cluster mode)
+    6006,   // TensorBoard (training indicator)
+    8501,   // Streamlit
+    8502    // Streamlit alt
+]);
+
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where LocalPort in (InferencePorts)
+| where RemoteIPType == "Loopback"
+    or RemoteIP startswith "127."
+    or RemoteIP startswith "0.0.0."
+    or RemoteIP startswith "::"
+| summarize
+    BindCount = count(),
+    Processes = make_set(InitiatingProcessFileName, 5),
+    Ports     = make_set(LocalPort)
+    by DeviceName, AccountName, bin(Timestamp, 1h)
+| order by BindCount desc

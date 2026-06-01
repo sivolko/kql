@@ -1,0 +1,66 @@
+// ============================================================
+// Detection: GPU Compute Library Image Loads
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceImageLoadEvents
+// Covers   : NVIDIA CUDA, AMD ROCm/HIP, Intel OpenVINO,
+//            Microsoft DirectML/WinML, ONNX Runtime providers,
+//            Vulkan compute
+// ============================================================
+
+let CUDALibs = dynamic([
+    // NVIDIA CUDA core
+    "nvcuda.dll",
+    "nvml.dll",
+    "nvcuvid.dll",
+    "nvrtc64_120_0.dll",
+    // CUDA runtime (multiple versions)
+    "cudart32_110.dll", "cudart64_110.dll",
+    "cudart32_120.dll", "cudart64_120.dll",
+    // cuBLAS (matrix multiply — core to transformer inference)
+    "cublas64_11.dll", "cublas64_12.dll",
+    "cublasLt64_11.dll", "cublasLt64_12.dll",
+    // Other CUDA math libs used by inference
+    "curand64_10.dll",
+    "cusparse64_11.dll",
+    "cufft64_10.dll",
+    "cusolverDn64_10.dll",
+    // Microsoft DirectML / WinML (CPU/GPU abstraction)
+    "DirectML.dll",
+    "WinMLRuntime.dll",
+    "WinMLLearningModel.dll",
+    // ONNX Runtime execution providers
+    "onnxruntime.dll",
+    "onnxruntime_providers_cuda.dll",
+    "onnxruntime_providers_rocm.dll",
+    "onnxruntime_providers_directml.dll",
+    "onnxruntime_providers_tensorrt.dll",
+    // Intel OpenVINO
+    "openvino.dll",
+    "inference_engine.dll",
+    "MKLDNNPlugin.dll",
+    "GPUPlugin.dll",
+    // AMD ROCm / HIP
+    "amdhip64.dll",
+    "rocblas.dll",
+    // Vulkan compute (used by some inference engines)
+    "vulkan-1.dll"
+]);
+
+let InferenceProcesses = dynamic([
+    "python.exe", "python3.exe", "python",
+    "ollama.exe", "llama.exe", "llama-server.exe",
+    "koboldcpp.exe", "gpt4all.exe",
+    "comfyui.exe", "invoke.exe",
+    "node.exe", "deno.exe",
+    "docker.exe"
+]);
+
+DeviceImageLoadEvents
+| where Timestamp > ago(7d)
+| where FileName in~ (CUDALibs)
+| where InitiatingProcessFileName in~ (InferenceProcesses)
+| summarize
+    LibsLoaded = make_set(FileName),
+    LibCount   = count()
+    by DeviceName, AccountName, InitiatingProcessFileName, bin(Timestamp, 1h)
+| order by LibCount desc

@@ -1,0 +1,91 @@
+// ============================================================
+// Detection: LLM Runtime Processes — All Known Binaries and
+//            Python ML Framework Invocations
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceProcessEvents
+// ============================================================
+
+let LLMBinaries = dynamic([
+    // Standalone GUI/CLI runtimes
+    "ollama.exe", "ollama",
+    "llama.exe", "llama-server.exe", "llama-cli.exe",
+    "koboldcpp.exe", "koboldcpp",
+    "gpt4all.exe", "gpt4all",
+    "jan.exe", "jan",
+    "lm_studio.exe", "lmstudio",
+    "localai.exe", "local-ai",
+    "llamafile.exe", "llamafile",
+    "tabby.exe", "tabby",
+    "text-generation-webui.exe",
+    "openwebui.exe",
+    "msty.exe",
+    // Image generation UIs
+    "comfyui.exe", "comfyui",
+    "invoke.exe",
+    // Speech / audio models
+    "whisper.exe", "whisper-server.exe",
+    // Inference servers (Linux / macOS process names via MDE)
+    "vllm", "sglang",
+    "tgi", "text-generation-inference"
+]);
+
+let MLPythonKeywords = dynamic([
+    // Quantized inference runtimes
+    "vllm", "llama_cpp", "llama-cpp", "llama-server",
+    "ctransformers", "exllama", "exllamav2", "autoawq",
+    "bitsandbytes", "gptq", "auto-gptq",
+    // HuggingFace ecosystem
+    "transformers", "diffusers", "accelerate", "peft",
+    "optimum", "trl", "datasets", "huggingface",
+    // UI / serving frameworks
+    "gradio", "streamlit",
+    // Image generation
+    "stable_diffusion", "stable-diffusion",
+    "webui", "comfyui", "invokeai",
+    // Audio / speech models
+    "whisper", "faster_whisper", "faster-whisper",
+    "bark", "coqui", "tts",
+    // Agent orchestration frameworks
+    "langchain", "llama_index", "llamaindex",
+    "autogen", "crewai", "semantic_kernel",
+    // API clients
+    "openai", "anthropic", "cohere", "mistralai",
+    // Serving
+    "uvicorn", "gunicorn", "fastapi",
+    // Notebooks
+    "jupyter", "ipykernel",
+    // Model / weight flags
+    "--model", "gguf", "safetensors", "serve"
+]);
+
+DeviceProcessEvents
+| where Timestamp > ago(7d)
+| where FileName in~ (LLMBinaries)
+    or (
+        FileName in~ ("python.exe", "python3.exe", "python")
+        and ProcessCommandLine has_any (MLPythonKeywords)
+    )
+    or (
+        FileName in~ ("node.exe", "node")
+        and ProcessCommandLine has_any ("langchain", "openai", "anthropic", "ollama", "llmjs", "ai-sdk")
+    )
+    or (
+        FileName in~ ("docker.exe", "docker", "podman.exe", "podman")
+        and ProcessCommandLine has_any ("ollama", "vllm", "cuda", "tgi", "localai", "comfyui")
+    )
+| project Timestamp, DeviceName, AccountName, FileName,
+          ProcessCommandLine, FolderPath, InitiatingProcessFileName
+| order by Timestamp desc
+
+// -------------------------------------------------------
+// Supplemental: High-frequency Python process bursts
+// (batch inference workloads)
+// -------------------------------------------------------
+// DeviceProcessEvents
+// | where Timestamp > ago(1d)
+// | where FileName =~ "python.exe"
+// | summarize ProcessCount = count(),
+//             Cmdlines = make_set(ProcessCommandLine, 5)
+//     by DeviceName, AccountName, bin(Timestamp, 1h)
+// | where ProcessCount > 20
+// | order by ProcessCount desc

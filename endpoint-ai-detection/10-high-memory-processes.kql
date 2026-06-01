@@ -1,0 +1,29 @@
+// ============================================================
+// Detection: High Working-Set Processes (Model Loading Indicator)
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceProcessEvents
+// Note     : Model RAM requirements by size:
+//              3B  params ~2-4 GB
+//              7B  params ~4-8 GB
+//             13B  params ~8-16 GB
+//             70B  params ~40-80 GB
+//            Sustained >3GB working set in ML runtimes is
+//            a strong inference workload indicator.
+// ============================================================
+
+DeviceProcessEvents
+| where Timestamp > ago(7d)
+| where FileName in~ (
+    "python.exe", "python3.exe", "python",
+    "ollama.exe", "llama-server.exe", "llama.exe",
+    "koboldcpp.exe", "gpt4all.exe", "jan.exe",
+    "lm_studio.exe", "localai.exe", "llamafile.exe",
+    "node.exe"
+)
+// PrivateBytes in bytes — threshold at 3 GB
+| extend PrivateMemoryMB = PrivateBytes / 1048576
+| where PrivateMemoryMB > 3000
+| project Timestamp, DeviceName, AccountName,
+          FileName, ProcessCommandLine,
+          PrivateMemoryMB
+| order by PrivateMemoryMB desc

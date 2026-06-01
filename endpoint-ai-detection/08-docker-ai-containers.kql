@@ -1,0 +1,40 @@
+// ============================================================
+// Detection: Docker / Podman Containers Running AI Workloads
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceProcessEvents
+// Note     : --gpus flag is the highest-confidence signal;
+//            GPU passthrough is required for meaningful
+//            local LLM inference at any practical speed.
+// ============================================================
+
+DeviceProcessEvents
+| where Timestamp > ago(7d)
+| where FileName in~ ("docker.exe", "docker", "podman.exe", "podman", "nerdctl.exe")
+| where ProcessCommandLine has_any (
+    // GPU passthrough flags (definitive)
+    "--gpus",
+    "--device=/dev/kfd",           // AMD ROCm in container
+    "--device=/dev/dri",           // Intel GPU / AMD GPU
+    "--runtime=nvidia",
+    "--ipc=host",                  // Common for distributed inference
+    // Known AI container images
+    "ollama/ollama",
+    "vllm/vllm-openai",
+    "nvidia/cuda",
+    "nvcr.io/nvidia",
+    "ghcr.io/huggingface",
+    "huggingface/",
+    "localai/localai", "mudler/localai",
+    "koboldcpp",
+    "oobabooga", "oobabooga/text-generation-webui",
+    "stabilityai",
+    "comfyanonymous/comfyui",
+    "onerahmet/openai-whisper",
+    "sglang", "lmsysorg/sglang",
+    "flashinfer",
+    "deepspeed",
+    "tgi", "ghcr.io/huggingface/text-generation-inference"
+)
+| project Timestamp, DeviceName, AccountName,
+          FileName, ProcessCommandLine
+| order by Timestamp desc

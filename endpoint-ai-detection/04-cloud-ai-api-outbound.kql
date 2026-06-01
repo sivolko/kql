@@ -1,0 +1,63 @@
+// ============================================================
+// Detection: Outbound Connections to Cloud AI API Endpoints
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceNetworkEvents
+// Covers   : OpenAI, Anthropic, Google AI, Azure OpenAI,
+//            AWS Bedrock, Mistral, Cohere, Groq, Perplexity,
+//            Together AI, Replicate, Fireworks, DeepSeek, Cerebras
+// ============================================================
+
+let AIAPIEndpoints = dynamic([
+    // OpenAI
+    "api.openai.com",
+    // Anthropic
+    "api.anthropic.com",
+    // Google AI / Vertex AI
+    "generativelanguage.googleapis.com",
+    "aiplatform.googleapis.com",
+    // Azure OpenAI (tenant-specific subdomain pattern matched via has)
+    "openai.azure.com",
+    // AWS Bedrock (region-specific; common regions listed)
+    "bedrock-runtime.us-east-1.amazonaws.com",
+    "bedrock-runtime.us-west-2.amazonaws.com",
+    "bedrock-runtime.eu-west-1.amazonaws.com",
+    "bedrock.us-east-1.amazonaws.com",
+    // Mistral
+    "api.mistral.ai",
+    // Cohere
+    "api.cohere.ai", "api.cohere.com",
+    // Groq
+    "api.groq.com",
+    // Perplexity
+    "api.perplexity.ai",
+    // Together AI
+    "api.together.xyz",
+    // Replicate
+    "api.replicate.com",
+    // Fireworks AI
+    "api.fireworks.ai",
+    // DeepSeek
+    "api.deepseek.com",
+    // Cerebras
+    "api.cerebras.ai",
+    // AI21 Labs
+    "api.ai21.com",
+    // Stability AI
+    "api.stability.ai",
+    // Hugging Face Inference API
+    "api-inference.huggingface.co"
+]);
+
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where RemoteUrl has_any (AIAPIEndpoints)
+    or RemoteIP has_any (AIAPIEndpoints)
+| summarize
+    CallCount  = count(),
+    FirstSeen  = min(Timestamp),
+    LastSeen   = max(Timestamp),
+    Processes  = make_set(InitiatingProcessFileName, 5),
+    Endpoints  = make_set(RemoteUrl, 10)
+    by DeviceName, AccountName
+| where CallCount > 0
+| order by CallCount desc

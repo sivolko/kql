@@ -1,0 +1,37 @@
+// ============================================================
+// Detection: GPU-Capable Device Inventory
+// Platform : Microsoft Defender for Endpoint — Advanced Hunting
+// Table    : DeviceTvmHardware
+// Use case : Scope all other AI detections to devices that
+//            actually have discrete GPU hardware capable of
+//            running meaningful local inference. Reduces
+//            alert noise on integrated-graphics endpoints.
+// ============================================================
+
+// Step 1: Build GPU-capable device list
+let GPUCapableDevices =
+    DeviceTvmHardware
+    | where AdditionalFields has "GPU"
+    | project DeviceName, ProcessorCount, InstalledRam, AdditionalFields
+    | extend GPUInfo = tostring(parse_json(AdditionalFields).GPUInfo)
+    | where GPUInfo has_any (
+        "NVIDIA", "GeForce", "RTX", "GTX", "Quadro", "Tesla",  // NVIDIA
+        "AMD", "Radeon", "RX ", "Vega", "RDNA",                 // AMD
+        "Intel Arc", "Intel Iris Xe",                           // Intel discrete
+        "Apple M"                                                // Apple Silicon (M1/M2/M3)
+    )
+    | project DeviceName, GPUInfo, ProcessorCount, InstalledRam;
+
+// Step 2: Output inventory
+GPUCapableDevices
+| order by DeviceName asc
+
+// -------------------------------------------------------
+// Join pattern: restrict process events to GPU devices only
+// Uncomment and combine with other detection queries
+// -------------------------------------------------------
+// DeviceProcessEvents
+// | where Timestamp > ago(7d)
+// | where DeviceName in ((GPUCapableDevices | project DeviceName))
+// | where FileName =~ "python.exe"
+// | ...
